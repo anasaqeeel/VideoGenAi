@@ -2,10 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { videoId: string } }
+  { params }: { params: Promise<{ videoId: string }> }
 ) {
   try {
-    const { videoId } = params;
+    const { videoId } = await params;
     console.log(`GET /api/status/${videoId} called`);
 
     const HEYGEN_KEY = process.env.HEYGEN_KEY;
@@ -26,6 +26,17 @@ export async function GET(
         },
       }
     );
+
+    // Check if response is actually JSON
+    const contentType = heygenRes.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const text = await heygenRes.text();
+      console.error("Non-JSON response from HeyGen:", text.substring(0, 200));
+      return NextResponse.json(
+        { error: { message: "Invalid response format from HeyGen API" } },
+        { status: 500 }
+      );
+    }
 
     const data = await heygenRes.json();
     console.log(

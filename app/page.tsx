@@ -33,10 +33,12 @@ export default function VideoGenerator() {
   })
   const [logs, setLogs] = useState<LogEntry[]>([])
   const videoRef = useRef<HTMLVideoElement>(null)
+  const logIdCounter = useRef(0)
 
   const addLog = (type: LogEntry["type"], message: string) => {
+    logIdCounter.current += 1
     const newLog: LogEntry = {
-      id: Date.now().toString(),
+      id: `log-${logIdCounter.current}`, // Use counter instead of timestamp
       timestamp: new Date().toLocaleTimeString(),
       type,
       message,
@@ -55,6 +57,9 @@ export default function VideoGenerator() {
       return
     }
 
+    // Reset logs and status
+    setLogs([])
+    logIdCounter.current = 0
     setVideoStatus({ status: "generating", progress: 10 })
     addLog("info", "Starting video generation...")
 
@@ -111,14 +116,18 @@ export default function VideoGenerator() {
 
     while (attempts < maxAttempts) {
       try {
-        addLog("info", `Checking video status... (Attempt ${attempts + 1}/${maxAttempts})`)
+        attempts++
+        addLog("info", `Checking video status... (Attempt ${attempts}/${maxAttempts})`)
 
         const statusRes = await fetch(`/api/status/${videoId}`)
-        const statusData = await statusRes.json()
 
         if (!statusRes.ok) {
-          throw new Error(statusData.error?.message || "Failed to check status")
+          const errorText = await statusRes.text()
+          console.error("Status API error:", errorText)
+          throw new Error(`Status check failed: ${statusRes.status}`)
         }
+
+        const statusData = await statusRes.json()
 
         const status = statusData.data?.status
         const progress = Math.min(30 + attempts * 2, 90)
@@ -142,8 +151,9 @@ export default function VideoGenerator() {
         } else {
           setVideoStatus((prev) => ({ ...prev, progress }))
           addLog("info", `Status: ${status || "processing"}...`)
+
+          // Wait 3 seconds before next check
           await new Promise((resolve) => setTimeout(resolve, 3000))
-          attempts++
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Status check failed"
@@ -183,6 +193,7 @@ export default function VideoGenerator() {
   const resetGenerator = () => {
     setVideoStatus({ status: "idle", progress: 0 })
     setLogs([])
+    logIdCounter.current = 0
     if (videoRef.current) {
       videoRef.current.src = ""
     }
